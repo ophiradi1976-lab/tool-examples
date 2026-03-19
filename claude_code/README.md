@@ -93,6 +93,16 @@ Example log output:
 
 ---
 
+## Try running as one-off
+```
+# Will need git permission
+claude -p "Commit the files, including under .claude but not under logs" --allowedTools "Bash(git add:*)" "Bash(git commit:*)" "Bash(git status)" "Bash(git diff)"
+
+# Will need and write permissions
+claude -p "Create .gitignore, add logs/ to it and commit the .gitignore" --allowedTools "Bash" "write"
+```
+
+---
 ## How Hooks Block Commands
 
 In `pre-tool.sh`, `exit 2` blocks the command and sends your stderr message
