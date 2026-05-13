@@ -1,0 +1,26 @@
+brew install neovim
+brew install ripgrep
+
+## create ~/.config/nvim/lua.init
+
+
+# 1. Install rbenv
+brew install rbenv ruby-build
+
+# 2. Add rbenv to your shell (zsh)
+echo 'eval "$(rbenv init - zsh)"' >> ~/.zshrc
+source ~/.zshrc
+
+# 3. Install a modern Ruby
+rbenv install 3.3.0
+rbenv global 3.3.0
+
+# 4. Verify
+ruby --version   # should say 3.3.0
+
+brew upgrade ruby
+# then add to your ~/.zshrc or ~/.bashrc:
+export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
+source ~/.zshrc
+gem install ruby-lsp
+
