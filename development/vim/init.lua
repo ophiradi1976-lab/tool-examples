@@ -7,6 +7,20 @@
 vim.g.mapleader = " "
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- EDITOR SETTINGS
+-- Basic visual improvements — line numbers and current line highlight.
+-- ─────────────────────────────────────────────────────────────────────────────
+vim.opt.number         = true   -- show absolute line numbers
+vim.opt.cursorline     = true   -- highlight the line the cursor is on
+vim.opt.shiftwidth     = 2      -- indent size when using >> or 
+vim.opt.tabstop        = 2      -- how wide a tab character appears
+vim.opt.expandtab      = true   -- insert spaces instead of tab characters
+vim.opt.splitright     = true   -- open vertical splits to the right
+
+-- Force a visible cursorline — the default Neovim theme makes it nearly invisible
+vim.api.nvim_set_hl(0, "CursorLine", { bg = "#3c3836", ctermbg = 236 })
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- RUBY PATH FIX
 -- Tell Neovim to use rbenv's Ruby instead of the old macOS system Ruby (2.6).
 -- This must be set early so Mason sees the correct Ruby when installing servers.
@@ -112,7 +126,6 @@ require("lazy").setup({
   -- Lines added show as │, changed as ~, deleted as _
   -- Also lets you stage/unstage individual hunks without leaving Neovim.
   { "lewis6991/gitsigns.nvim" },
-
 })
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -368,3 +381,18 @@ require("gitsigns").setup({
     vim.keymap.set("n", "<leader>gb", function() gs.blame_line({ full = true }) end, { buffer = bufnr, desc = "Blame line" })
   end,
 })
+
+-- Mapping <space> as leader key to launching terminal in vertical split, to the right
+vim.keymap.set("n", "<leader>t", ":vs | terminal<CR>")
+--
+-- Setting the default split to the right
+vim.opt.splitright = true
+
+-- Use option (meta key) on Mac h/l/j/k as navigation arrows to resize the new window 
+vim.keymap.set("n", "<M-h>", ":vertical resize -3<CR>")
+vim.keymap.set("n", "<M-l>", ":vertical resize +3<CR>")
+vim.keymap.set("n", "<M-k>", ":resize +2<CR>")
+vim.keymap.set("n", "<M-j>", ":resize -2<CR>")
+vim.keymap.set("n", "<M-Right>", ":vertical resize +3<CR>")
+vim.keymap.set("n", "<M-Up>", ":resize +2<CR>")
+vim.keymap.set("n", "<M-Down>", ":resize -2<CR>")

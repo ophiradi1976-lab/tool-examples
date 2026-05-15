@@ -24,3 +24,10 @@ export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
 source ~/.zshrc
 gem install ruby-lsp
 
+
+## Install GitGub CoPilot:
+## Run with CoPilot na dauthenticate with `/login`
+brew install copilot-cli
+
+### Need to update in vim:
+### TSInstall python javascript typescript ruby
