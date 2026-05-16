@@ -1,0 +1,100 @@
+---
+- name: Install useful CLI tools on local macOS
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    zshrc_path: "{{ lookup('env', 'HOME') }}/.zshrc"
+    homebrew_packages:
+      - fzf
+      - bat
+      - eza
+      - tree
+      - lazygit
+      - tig
+      - git-delta
+      - jq
+      - just
+      - direnv
+      - entr
+      - watchexec
+      - hyperfine
+      - tldr
+      - asciinema
+      - pv
+      - lazydocker
+
+  tasks:
+    - name: Ensure this playbook is running on macOS
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['os_family'] == 'Darwin'
+        fail_msg: "This playbook is intended for macOS only."
+
+    - name: Check that Homebrew is installed
+      ansible.builtin.command: brew --version
+      register: brew_version
+      changed_when: false
+
+    - name: Install CLI tools with Homebrew
+      community.general.homebrew:
+        name: "{{ homebrew_packages }}"
+        state: present
+        update_homebrew: true
+
+    - name: Ensure ~/.zshrc exists
+      ansible.builtin.file:
+        path: "{{ zshrc_path }}"
+        state: touch
+        mode: "0644"
+
+    - name: Install fzf zsh integration
+      ansible.builtin.command: "{{ lookup('pipe', 'brew --prefix') }}/opt/fzf/install --all --no-bash --no-fish"
+      args:
+        creates: "{{ lookup('env', 'HOME') }}/.fzf.zsh"
+
+    - name: Add useful shell aliases and hooks to ~/.zshrc
+      ansible.builtin.blockinfile:
+        path: "{{ zshrc_path }}"
+        marker: "# {mark} ANSIBLE MANAGED CLI TOOLS"
+        block: |
+          # eza aliases
+          alias ls="eza"
+          alias ll="eza -lah --git"
+          alias lt="eza --tree"
+
+          # bat alias
+          alias cat="bat"
+
+          # direnv integration
+          eval "$(direnv hook zsh)"
+
+    - name: Configure Git to use delta as pager
+      community.general.git_config:
+        name: core.pager
+        scope: global
+        value: delta
+
+    - name: Configure Git interactive diffFilter for delta
+      community.general.git_config:
+        name: interactive.diffFilter
+        scope: global
+        value: "delta --color-only"
+
+    - name: Enable delta navigation
+      community.general.git_config:
+        name: delta.navigate
+        scope: global
+        value: "true"
+
+    - name: Set improved Git merge conflict style
+      community.general.git_config:
+        name: merge.conflictstyle
+        scope: global
+        value: zdiff3
+
+    - name: Update tldr cache
+      ansible.builtin.command: tldr --update
+      changed_when: false
+      failed_when: false
