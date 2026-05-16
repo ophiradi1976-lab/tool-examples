@@ -1,0 +1,222 @@
+---
+- name: Setup development environment
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    ruby_version: "3.3.0"
+    home_dir: "{{ ansible_facts['env']['HOME'] }}"
+    repo_root: "{{ playbook_dir | dirname }}"
+    homebrew_bin: >-
+      {{ '/opt/homebrew/bin/brew' if ansible_facts['machine'] == 'arm64' else '/usr/local/bin/brew' }}
+
+  tasks:
+
+    # ─── Homebrew ───────────────────────────────────────────────────────────────
+
+    - name: Check if Homebrew is installed
+      ansible.builtin.stat:
+        path: "{{ homebrew_bin }}"
+      register: brew_stat
+      tags: [common]
+
+    - name: Install Homebrew
+      ansible.builtin.shell: >
+        /bin/bash -c
+        "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      when: not brew_stat.stat.exists
+      environment:
+        NONINTERACTIVE: "1"
+      tags: [common]
+
+    # ─── Core CLI tools ─────────────────────────────────────────────────────────
+
+    - name: Install core Homebrew packages
+      ansible.builtin.command: "{{ homebrew_bin }} install {{ item }}"
+      loop:
+        - git
+        - gh               # GitHub CLI — used for PRs, issues, auth
+        - neovim
+        - ripgrep          # required by Telescope (live grep inside Neovim)
+        - rbenv
+        - ruby-build
+        - node             # Node 18+ required by Claude Code
+        - plantuml         # diagram generation
+        - graphviz         # PlantUML dependency for graph layouts
+      register: brew_install
+      changed_when: "'already installed' not in brew_install.stderr"
+      failed_when:
+        - brew_install.rc != 0
+        - "'already installed' not in brew_install.stderr"
+      tags: [common]
+
+    - name: Install GitHub Copilot CLI
+      ansible.builtin.command: "{{ homebrew_bin }} install copilot-cli"
+      register: copilot_install
+      changed_when: "'already installed' not in copilot_install.stderr"
+      failed_when: false
+      tags: [common]
+
+    # ─── rbenv + Ruby ───────────────────────────────────────────────────────────
+
+    - name: Check if Ruby {{ ruby_version }} is already installed via rbenv
+      ansible.builtin.shell: |
+        export PATH="{{ home_dir }}/.rbenv/bin:$PATH"
+        rbenv versions 2>/dev/null | grep -q "{{ ruby_version }}"
+      register: ruby_check
+      failed_when: false
+      changed_when: false
+      tags: [common]
+
+    - name: Install Ruby {{ ruby_version }} via rbenv
+      ansible.builtin.shell: |
+        export PATH="{{ home_dir }}/.rbenv/bin:$PATH"
+        rbenv install {{ ruby_version }}
+      when: ruby_check.rc != 0
+      tags: [common]
+
+    - name: Set Ruby {{ ruby_version }} as global default
+      ansible.builtin.shell: |
+        export PATH="{{ home_dir }}/.rbenv/bin:$PATH"
+        rbenv global {{ ruby_version }}
+      tags: [common]
+
+    - name: Install ruby-lsp gem
+      ansible.builtin.shell: |
+        export PATH="{{ home_dir }}/.rbenv/shims:{{ home_dir }}/.rbenv/bin:$PATH"
+        eval "$(rbenv init - bash)"
+        gem install ruby-lsp
+      args:
+        executable: /bin/bash
+      register: gem_install
+      changed_when: "'Successfully installed' in gem_install.stdout"
+      failed_when:
+        - gem_install.rc != 0
+        - "'already installed' not in gem_install.stdout"
+      tags: [common]
+
+    # ─── Claude Code (home only) ─────────────────────────────────────────────────
+
+    - name: Check if Claude Code is installed
+      ansible.builtin.command: which claude
+      register: claude_check
+      failed_when: false
+      changed_when: false
+      tags: [home]
+
+    - name: Install Claude Code via npm
+      ansible.builtin.command: npm install -g @anthropic-ai/claude-code
+      when: claude_check.rc != 0
+      tags: [home]
+
+    # ─── Neovim config ──────────────────────────────────────────────────────────
+
+    - name: Create Neovim config directory
+      ansible.builtin.file:
+        path: "{{ home_dir }}/.config/nvim"
+        state: directory
+        mode: "0755"
+      tags: [common]
+
+    - name: Copy Neovim init.lua from repo
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/development/vim/init.lua"
+        dest: "{{ home_dir }}/.config/nvim/init.lua"
+        backup: true
+      tags: [common]
+
+    # ─── Python utilities ───────────────────────────────────────────────────────
+
+    - name: Create ~/bin directory
+      ansible.builtin.file:
+        path: "{{ home_dir }}/bin"
+        state: directory
+        mode: "0755"
+      tags: [common]
+
+    - name: Install work log script (notes)
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/utils/work_log/notes.py"
+        dest: "{{ home_dir }}/bin/notes"
+        mode: "0755"
+      tags: [common]
+
+    - name: Install task tracker script (tracker)
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/utils/tracker/tracker.py"
+        dest: "{{ home_dir }}/bin/tracker"
+        mode: "0755"
+      tags: [common]
+
+    # ─── Shell configuration (~/.zshrc) ─────────────────────────────────────────
+
+    - name: Ensure ~/.zshrc exists
+      ansible.builtin.file:
+        path: "{{ home_dir }}/.zshrc"
+        state: touch
+        modification_time: preserve
+        access_time: preserve
+      tags: [common]
+
+    - name: Add rbenv init to ~/.zshrc
+      ansible.builtin.blockinfile:
+        path: "{{ home_dir }}/.zshrc"
+        marker: "# {mark} ANSIBLE MANAGED — rbenv"
+        block: |
+          export PATH="$HOME/.rbenv/bin:$PATH"
+          eval "$(rbenv init - zsh)"
+      tags: [common]
+
+    - name: Add Homebrew Ruby to PATH in ~/.zshrc
+      ansible.builtin.blockinfile:
+        path: "{{ home_dir }}/.zshrc"
+        marker: "# {mark} ANSIBLE MANAGED — ruby-homebrew-path"
+        block: |
+          export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
+      tags: [common]
+
+    - name: Add ~/bin to PATH in ~/.zshrc
+      ansible.builtin.blockinfile:
+        path: "{{ home_dir }}/.zshrc"
+        marker: "# {mark} ANSIBLE MANAGED — user-bin-path"
+        block: |
+          export PATH="$HOME/bin:$PATH"
+      tags: [common]
+
+    - name: Set default editor to nvim in ~/.zshrc
+      ansible.builtin.blockinfile:
+        path: "{{ home_dir }}/.zshrc"
+        marker: "# {mark} ANSIBLE MANAGED — editor"
+        block: |
+          export EDITOR=nvim
+      tags: [common]
+
+    # ─── Summary ────────────────────────────────────────────────────────────────
+
+    - name: Print post-install instructions
+      ansible.builtin.debug:
+        msg: |
+          ────────────────────────────────────────────────────────────────
+          Installation complete. Manual steps remaining:
+
+          1. Reload your shell:
+               source ~/.zshrc
+
+          2. Open Neovim to install plugins (lazy.nvim runs automatically):
+               nvim
+
+          3. Inside Neovim, install LSP servers:
+               :MasonInstall pyright ts_ls ruby_lsp lua_ls
+
+          4. Authenticate GitHub CLI:
+               gh auth login
+
+          5. Authenticate GitHub Copilot (if copilot-cli installed):
+               copilot auth login
+               # or: gh extension install github/gh-copilot && gh copilot auth
+
+          6. Authenticate Claude Code:
+               claude
+          ────────────────────────────────────────────────────────────────
+      tags: [common]
